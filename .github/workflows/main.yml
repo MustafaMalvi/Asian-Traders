@@ -27,7 +27,19 @@ jobs:
           GSJ: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           S=$(find . -name settings.gradle.kts | head -n1)
-          if [ -z "$S" ]; then echo "::error::settings.gradle.kts not found in repo"; exit 1; fi
+          if [ -z "$S" ]; then
+            Z=$(find . -iname '*.zip' -not -path './.git/*' | head -n1)
+            if [ -n "$Z" ]; then
+              echo "Unzipping $Z"
+              mkdir -p _unz && unzip -q "$Z" -d _unz
+              S=$(find _unz -name settings.gradle.kts | head -n1)
+            fi
+          fi
+          if [ -z "$S" ]; then
+            echo "Files in repo:"; find . -not -path './.git/*' -maxdepth 3 | head -50
+            echo "::error::Project not found. Upload AsianTradersShop-full.zip to the repo root."
+            exit 1
+          fi
           DIR=$(dirname "$S")
           echo "Project folder: $DIR"
           echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
