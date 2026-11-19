@@ -22,23 +22,35 @@ jobs:
         with:
           gradle-version: 8.7
 
-      - name: Add google-services.json
+      - name: Locate project and add google-services.json
         env:
           GSJ: ${{ secrets.GOOGLE_SERVICES_JSON }}
-        run: echo "$GSJ" > app/google-services.json
+        run: |
+          S=$(find . -name settings.gradle.kts | head -n1)
+          if [ -z "$S" ]; then echo "::error::settings.gradle.kts not found in repo"; exit 1; fi
+          DIR=$(dirname "$S")
+          echo "Project folder: $DIR"
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          mkdir -p "$DIR/app"
+          if [ -n "$GSJ" ]; then printf '%s' "$GSJ" > "$DIR/app/google-services.json"; fi
+          if [ ! -f "$DIR/app/google-services.json" ]; then
+            echo "::error::google-services.json missing. Add repo secret GOOGLE_SERVICES_JSON (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
 
       - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
         run: gradle assembleDebug --no-daemon
 
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Publish as release (direct download link)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete latest -y --cleanup-tag || true
-          gh release create latest app/build/outputs/apk/debug/app-debug.apk \
+          gh release create latest "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk" \
             --title "Latest build" --notes "Debug APK"
